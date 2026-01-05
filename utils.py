@@ -2,7 +2,7 @@ import sys
 import os
 from enum import Enum
 from typing import List, Dict, Any, Optional, Union, Type, Tuple
-from pydantic import BaseModel, Field, validator, ValidationError
+from pydantic import BaseModel, Field, field_validator, ValidationError
 import json
 import random
 from openai import OpenAI
@@ -91,7 +91,8 @@ class AgentResponse(BaseModel):
     model_used: Optional[str] = None
     confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Confidence score (0-1)")
 
-    @validator("risk_assessment", pre=True)
+    @field_validator("risk_assessment", mode="before")
+    @classmethod
     def normalize_risk_assessment(cls, v):
         if isinstance(v, str):
             v_lower = v.lower().strip()
@@ -155,7 +156,8 @@ class FinalDecisionResponse(BaseModel):
     reasoning: str
     model_used: Optional[str] = None
 
-    @validator("final_risk_level", pre=True)
+    @field_validator("final_risk_level", mode="before")
+    @classmethod
     def normalize_risk_assessment(cls, v):
         if isinstance(v, str):
             v_lower = v.lower().strip()
