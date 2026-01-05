@@ -16,3 +16,4 @@ venv.bak/
 # Others
 .api-key
 notes.txt
+preprocess/
