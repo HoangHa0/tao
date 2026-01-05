@@ -455,107 +455,117 @@ Options:
                 })
 
     elif dataset_name == "safetybench":
-        for k,v in dataset.items():
-            for i, item in enumerate(v):
-                case_count += 1
-                question = item["question"]
-                options = item["options"]
-                label = item['answer']
-                case_id = item.get('id', f"{k}_{i}")
-                category = k
-
-                print(f"\n🔍 [{case_count}/{total_cases}] Processing SafetyBench Case")
-                print(f"   📋 ID: {case_id}")
-                print(f"   📂 Category: {category}")
-                print(f"   💰 Current cost: ${token_tracker.get_cost():.4f}")
-
-                options_str = ""
-                for idx, option in enumerate(options):
-                    options_str += f"({chr(ord('A') + idx)}) {option}\n"
-
-                case_text = f"""
-Category: {category}
-
-Question: {question}
-
-Options:
-{options_str}
-"""
-                case_metadata = {
-                    "question": question,
-                    "options": options,
-                    "category": category,
-                    "label": label,
-                    "id": case_id
-                }
-
-                # Get ground truth for this case
-                ground_truth = None
-                if ground_truth_data and str(case_id) in ground_truth_data:
-                    ground_truth = ground_truth_data[str(case_id)].get("correct_answer")
-
-                try:
-                    result = tao.process_case(case_text, dataset_name, case_metadata, ground_truth)
-                    check_cost_limits(case_count)
-                    
-                    # Enhanced debugging output for SafetyBench
-                    if verbose:
-                        tao_output = result.get('tiered_agentic_oversight_output', {})
-                        router_output = tao_output.get('router_output', {})
-                        final_decision = tao_output.get('final_decision', {})
-                        processing_metadata = tao_output.get('processing_metadata', {})
-                        
-                        print(f"🔍 ROUTER DEBUG:")
-                        required_expertise = router_output.get('required_expertise', [])
-                        print(f"   Router assigned tiers: {[exp.get('tier') for exp in required_expertise]}")
-                        print(f"   Max tier assigned: {max([exp.get('tier', 0) for exp in required_expertise]) if required_expertise else 0}")
-                        
-                        print(f"📊 CASE RESULTS:")
-                        print(f"   🎯 Experts recruited: {len(required_expertise)}")
-                        print(f"   🏆 Final risk: {final_decision.get('final_risk_level', 'unknown').upper()}")
-                        print(f"   🏗️ Highest tier reached: {processing_metadata.get('last_processed_tier', 1)}")
-                        print(f"   👥 Individual answers: {processing_metadata.get('individual_answers_extracted', 0)}")
-                        print(f"   🔬 Error analyses: {processing_metadata.get('error_analyses_conducted', 0)}")
-                        print(f"   🔄 Real escalation: {'✅' if processing_metadata.get('real_escalation_enabled') else '❌'}")
-                        
-                        # Show escalation path details
-                        escalation_details = tao_output.get('escalation_path_details', [])
-                        print(f"   ⬆️ Escalation path:")
-                        for detail in escalation_details:
-                            tier = detail.get('tier')
-                            escalate = detail.get('escalate_decision')
-                            print(f"      Tier {tier}: {'ESCALATE' if escalate else 'NO ESCALATION'}")
-                        
-                        # Show inter-tier conversation results
-                        conversations = tao_output.get('conversations_summary', [])
-                        for conv in conversations:
-                            if conv.get('conversation_type') == 'inter_tier':
-                                summary = conv.get('summary', {})
-                                escalation_necessary = summary.get('escalation_necessary', 'unknown')
-                                print(f"   🤝 Inter-tier result: {'ESCALATION APPROVED' if escalation_necessary else 'ESCALATION DECLINED'}")
+        # Normalize dataset to a list of items
+        items_to_process = []
+        if isinstance(dataset, list):
+            items_to_process = dataset
+        elif isinstance(dataset, dict):
+            for k, v in dataset.items():
+                for item in v:
+                    if 'category' not in item:
+                        item['category'] = k
+                    items_to_process.append(item)
         
-                    results.append(result)
+        for i, item in enumerate(items_to_process):
+            case_count += 1
+            question = item["question"]
+            options = item["options"]
+            label = item.get('answer')
+            category = item.get('category', 'Unknown')
+            case_id = item.get('id', f"case_{i}")
+
+            print(f"\n🔍 [{case_count}/{total_cases}] Processing SafetyBench Case")
+            print(f"   📋 ID: {case_id}")
+            print(f"   📂 Category: {category}")
+            print(f"   💰 Current cost: ${token_tracker.get_cost():.4f}")
+
+            options_str = ""
+            for idx, option in enumerate(options):
+                options_str += f"({chr(ord('A') + idx)}) {option}\n"
+
+            case_text = f"""
+            Category: {category}
+
+            Question: {question}
+
+            Options:
+            {options_str}
+            """
+            case_metadata = {
+                "question": question,
+                "options": options,
+                "category": category,
+                "label": label,
+                "id": case_id
+            }
+
+            # Get ground truth for this case
+            ground_truth = None
+            if ground_truth_data and str(case_id) in ground_truth_data:
+                ground_truth = ground_truth_data[str(case_id)].get("correct_answer")
+
+            try:
+                result = tao.process_case(case_text, dataset_name, case_metadata, ground_truth)
+                check_cost_limits(case_count)
+                
+                # Enhanced debugging output for SafetyBench
+                if verbose:
+                    tao_output = result.get('tiered_agentic_oversight_output', {})
+                    router_output = tao_output.get('router_output', {})
+                    final_decision = tao_output.get('final_decision', {})
+                    processing_metadata = tao_output.get('processing_metadata', {})
                     
-                    if args.save_intermediate:
-                        intermediate_file = os.path.join(args.output_dir, f"intermediate_{dataset_name}_case_{case_count}.json")
-                        with open(intermediate_file, 'w') as f:
-                            json.dump(result, f, indent=2)
+                    print(f"🔍 ROUTER DEBUG:")
+                    required_expertise = router_output.get('required_expertise', [])
+                    print(f"   Router assigned tiers: {[exp.get('tier') for exp in required_expertise]}")
+                    print(f"   Max tier assigned: {max([exp.get('tier', 0) for exp in required_expertise]) if required_expertise else 0}")
                     
-                    if args.test_cases and case_count >= args.test_cases:
-                        print(f"🧪 DEBUG: Reached test case limit ({args.test_cases}). Stopping.")
-                        break
+                    print(f"📊 CASE RESULTS:")
+                    print(f"   🎯 Experts recruited: {len(required_expertise)}")
+                    print(f"   🏆 Final risk: {final_decision.get('final_risk_level', 'unknown').upper()}")
+                    print(f"   🏗️ Highest tier reached: {processing_metadata.get('last_processed_tier', 1)}")
+                    print(f"   👥 Individual answers: {processing_metadata.get('individual_answers_extracted', 0)}")
+                    print(f"   🔬 Error analyses: {processing_metadata.get('error_analyses_conducted', 0)}")
+                    print(f"   🔄 Real escalation: {'✅' if processing_metadata.get('real_escalation_enabled') else '❌'}")
                     
-                except Exception as e:
-                    print(f"❌ Error processing case {case_count}: {e}")
-                    results.append({
-                        "dataset_name": dataset_name,
-                        "question": question,
-                        "category": category,
-                        "input_case": case_text,
-                        "error": str(e),
-                        "usage_statistics": token_tracker.get_summary()
-                    })
-            
+                    # Show escalation path details
+                    escalation_details = tao_output.get('escalation_path_details', [])
+                    print(f"   ⬆️ Escalation path:")
+                    for detail in escalation_details:
+                        tier = detail.get('tier')
+                        escalate = detail.get('escalate_decision')
+                        print(f"      Tier {tier}: {'ESCALATE' if escalate else 'NO ESCALATION'}")
+                    
+                    # Show inter-tier conversation results
+                    conversations = tao_output.get('conversations_summary', [])
+                    for conv in conversations:
+                        if conv.get('conversation_type') == 'inter_tier':
+                            summary = conv.get('summary', {})
+                            escalation_necessary = summary.get('escalation_necessary', 'unknown')
+                            print(f"   🤝 Inter-tier result: {'ESCALATION APPROVED' if escalation_necessary else 'ESCALATION DECLINED'}")
+    
+                results.append(result)
+                
+                if args.save_intermediate:
+                    intermediate_file = os.path.join(args.output_dir, f"intermediate_{dataset_name}_case_{case_count}.json")
+                    with open(intermediate_file, 'w') as f:
+                        json.dump(result, f, indent=2)
+                
+                if args.test_cases and case_count >= args.test_cases:
+                    print(f"🧪 DEBUG: Reached test case limit ({args.test_cases}). Stopping.")
+                    break
+                
+            except Exception as e:
+                print(f"❌ Error processing case {case_count}: {e}")
+                results.append({
+                    "dataset_name": dataset_name,
+                    "question": question,
+                    "category": category,
+                    "input_case": case_text,
+                    "error": str(e),
+                    "usage_statistics": token_tracker.get_summary()
+                })
+        
             if args.test_cases and case_count >= args.test_cases:
                 break
 
